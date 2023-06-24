@@ -1,6 +1,7 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -12,9 +13,11 @@ import (
 func main() {
 	e := echo.New()
 	m := melody.New()
+	m.Config.MaxMessageSize = 8192
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	e.Use(middleware.CORS())
 
 	// http://localhost:1323
 	e.GET("/", func(c echo.Context) error {
@@ -28,7 +31,12 @@ func main() {
 	})
 
 	m.HandleMessage(func(s *melody.Session, msg []byte) {
-		m.Broadcast(msg)
+		log.Println("message", string(msg))
+
+		m.BroadcastFilter(msg, func(q *melody.Session) bool {
+			// Retorna true para enviar a mensagem para todos os clientes, exceto o remetente original
+			return q != s
+		})
 	})
 
 	e.Logger.Fatal(e.Start(":1323"))
