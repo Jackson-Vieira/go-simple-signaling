@@ -9,28 +9,39 @@ import (
 )
 
 type Peer struct {
-	id          string
-	room        *Room
-	conn        *melody.Session
-	displayName string
-	mu          sync.RWMutex
+	ID   string `json:"id"`
+	Room *Room  `json:"-"`
+	// FIXME: dont export this field in future
+	Conn        *melody.Session `json:"-"`
+	DisplayName string          `json:"displayName"`
+	mu          sync.RWMutex    `json:"-"`
 }
 
+// return the peer id
 func (p *Peer) Id() string {
-	return p.id
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.ID
 }
 
-func (p *Peer) DisplayName() string {
-	return p.displayName
+// return the display name
+func (p *Peer) GetDisplayName() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	return p.DisplayName
 }
 
-func (p *Peer) Room() *Room {
+// return the room id
+func (p *Peer) GetRoom() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.room
+	return p.Room.Id()
 }
 
+// write a message to the peer
 func (p *Peer) WriteConn(m ClientMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -41,7 +52,20 @@ func (p *Peer) WriteConn(m ClientMessage) error {
 		return err
 	}
 
-	err = p.conn.Write(messageJSON)
+	err = p.Conn.Write(messageJSON)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Close peer
+func (p *Peer) Close() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	err := p.Conn.CloseWithMsg([]byte(`{"type":"peer_closed"}`))
 	if err != nil {
 		return err
 	}

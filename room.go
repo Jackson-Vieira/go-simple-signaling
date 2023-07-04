@@ -41,7 +41,7 @@ func (r *Room) Close() {
 	fmt.Println("Closing room", r.Id())
 	for _, peer := range r.Peers {
 		fmt.Println("Closing peer", peer.Id())
-		err := peer.conn.CloseWithMsg([]byte(`{"type":"room_closed"}`))
+		err := peer.Close()
 		if err != nil {
 			fmt.Println("Error closing peer connection:", err)
 		}
