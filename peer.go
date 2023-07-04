@@ -65,7 +65,7 @@ func (p *Peer) Close() error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	err := p.Conn.CloseWithMsg([]byte(`{"type":"peer_closed"}`))
+	err := p.Conn.CloseWithMsg([]byte(`{"type":"peer_disconnected","payload":{}}`))
 	if err != nil {
 		return err
 	}
