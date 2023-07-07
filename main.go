@@ -2,9 +2,12 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"net/http"
 	"sync"
+
+	"github.com/Jackson-Vieira/go-simple-signalling/domain"
+	"github.com/Jackson-Vieira/go-simple-signalling/types"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -12,12 +15,8 @@ import (
 	"github.com/olahol/melody"
 )
 
-func isJoinMessage(message ClientMessage) bool {
-	return message.Type == "join"
-}
-
 type RoomManager struct {
-	rooms map[string]*Room
+	rooms map[string]*domain.Room
 	mu    sync.RWMutex
 }
 
@@ -25,18 +24,20 @@ func (rm *RoomManager) CreateRoom(displayName string) string {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	newRoom := &Room{
-		Id:          uuid.New().String(),
+	// FIXUP: factory function for creating rooms
+	newRoom := &domain.Room{
+		ID:          uuid.New().String(),
 		DisplayName: displayName,
-		Peers:       make([]*Peer, 0),
 	}
+	newRoom.Init()
 
-	rm.rooms[newRoom.Id] = newRoom
+	roomId := newRoom.Id()
+	rm.rooms[roomId] = newRoom
 
-	return newRoom.Id
+	return roomId
 }
 
-func (rm *RoomManager) GetRoom(roomId string) (*Room, bool) {
+func (rm *RoomManager) GetRoom(roomId string) (*domain.Room, bool) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
@@ -44,61 +45,67 @@ func (rm *RoomManager) GetRoom(roomId string) (*Room, bool) {
 	return room, ok
 }
 
-func (rm *RoomManager) GetAllRooms() []*Room {
+func (rm *RoomManager) GetAllRooms() []*domain.Room {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	rooms := make([]*Room, 0, len(rm.rooms))
+	rooms := make([]*domain.Room, 0, len(rm.rooms))
 	for _, room := range rm.rooms {
 		rooms = append(rooms, room)
 	}
 	return rooms
 }
 
+// join room
+// leave room
+// func leaveRoom(peer *domain.Peer) {
+// 	room := peer.GetRoom()
+
+// 	if room == nil {
+// 		log.Println("Peer", peer.Id(), "not in a room")
+// 		return
+// 	}
+
+// 	// remove peer from room
+// 	peerId := peer.Id()
+// 	room.RemovePeer(peerId)
+// }
+
 func main() {
 	e := echo.New()
-	m := melody.New()
-	m.Config.MaxMessageSize = 8192
 
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	e.Use(middleware.CORS())
 
+	m := melody.New()
+	m.Config.MaxMessageSize = 8192
+
 	roomManager := RoomManager{
-		rooms: make(map[string]*Room),
+		rooms: make(map[string]*domain.Room),
 	}
 
-	roomId := roomManager.CreateRoom("Sala Teste 1")
-	fmt.Println("RoomID", roomId)
+	roomId := roomManager.CreateRoom("Mindmeet-01")
+	log.Println("Created room test", roomId)
 
-	// http://localhost:1323
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
 
-	// ws://localhost:1323
 	e.GET("/ws", func(c echo.Context) error {
 		m.HandleRequest(c.Response().Writer, c.Request())
 		return nil
 	})
 
-	// return a peer object
-	// m.HandleConnect(func(s *melody.Session){ return })
-
+	// websocket event handlers
 	m.HandleMessage(func(s *melody.Session, msg []byte) {
 
-		var message ClientMessage
+		var message types.ClientMessage
 		err := json.Unmarshal(msg, &message)
 
 		if err != nil {
-			// returm invalid message
-			fmt.Println("Error decoding JSON", m)
+			log.Println("Error decoding JSON", m)
 			return
-		}
-
-		if !isJoinMessage(message) {
-			fmt.Println("Is join Message")
-			// validate if peer is in a room
 		}
 
 		switch message.Type {
@@ -106,50 +113,43 @@ func main() {
 		case "join":
 			room, found := roomManager.GetRoom(message.RoomID)
 			if !found {
-				fmt.Println("Room not found")
+				log.Println("Room not found")
 				return
 			}
 
-			peer := &Peer{
-				id:   uuid.New().String(),
-				room: nil,
-				conn: s,
+			// FIXUP: factory function for creating peers (with room) and with connection as parameter
+			peer := &domain.Peer{
+				ID:   uuid.New().String(),
+				Room: nil,
+				Conn: s,
 			}
 
-			// room.AddPeer
-			room.Peers = append(room.Peers, peer)
-			peer.room = room
+			room.AddPeer(peer)
 
-			response := ClientMessage{
+			// FIXUP: peer.SetRoom
+			peer.Room = room
+
+			// FIXUP: connected message
+			m := types.ClientMessage{
 				Type:    "peer_connected",
 				PeerID:  peer.Id(),
-				RoomID:  room.Id,
+				RoomID:  room.Id(),
 				Payload: make(map[string]interface{}),
 				Options: message.Options,
 			}
 
-			if len(room.Peers) > 0 {
-				for _, p := range room.Peers {
-					// p.Send | p.WriteConn
-					if err := p.WriteConn(response); err != nil {
-						fmt.Println("Error sending message:", err)
-					}
-				}
-			}
+			room.Broadcast(m)
 
 		case "leave":
-			fmt.Println("leave case")
+			log.Println("leave case")
 		case "offer":
-			fmt.Println("offer case")
+			log.Println("offer case")
 		case "answer":
-			fmt.Println("answer case")
+			log.Println("answer case")
 		case "ice-candidate":
-			fmt.Println("ice-candidate-case")
+			log.Println("ice-candidate-case")
 		}
 
 	})
 	e.Logger.Fatal(e.Start(":1323"))
 }
-
-//  Room.validate
-//
