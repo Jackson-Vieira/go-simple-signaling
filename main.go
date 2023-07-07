@@ -97,6 +97,23 @@ func main() {
 		return nil
 	})
 
+	// m.HandleConnect(func(s *melody.Session) {
+	// 	log.Println("Connected")
+	// })
+
+	// m.HandleDisconnect(func(s *melody.Session) {
+	// 	log.Println("Disconnected")
+	// })
+
+	// m.HandleClose(func(s *melody.Session, i int, s2 string) error {
+	// 	log.Println("Closed")
+	// 	return nil
+	// })
+
+	// m.HandleError(func(s *melody.Session, e error) {
+	// 	log.Println("Error", e)
+	// })
+
 	// websocket event handlers
 	m.HandleMessage(func(s *melody.Session, msg []byte) {
 
@@ -142,13 +159,19 @@ func main() {
 
 		case "leave":
 			log.Println("leave case")
+
 		case "offer":
 			log.Println("offer case")
+
 		case "answer":
 			log.Println("answer case")
+
 		case "ice-candidate":
 			log.Println("ice-candidate-case")
 		}
+
+		// handle unknown message type
+		log.Println("Unknown message type", message.Type)
 
 	})
 	e.Logger.Fatal(e.Start(":1323"))
