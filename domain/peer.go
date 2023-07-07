@@ -1,11 +1,13 @@
-package main
+package domain
 
 import (
 	"encoding/json"
-	"fmt"
+	"log"
 	"sync"
 
 	"github.com/olahol/melody"
+
+	"github.com/Jackson-Vieira/go-simple-signalling/types"
 )
 
 type Peer struct {
@@ -34,21 +36,21 @@ func (p *Peer) GetDisplayName() string {
 }
 
 // return the room id
-func (p *Peer) GetRoom() string {
+func (p *Peer) GetRoom() *Room {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	return p.Room.Id()
+	return p.Room
 }
 
 // write a message to the peer
-func (p *Peer) WriteConn(m ClientMessage) error {
+func (p *Peer) WriteConn(m types.ClientMessage) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	messageJSON, err := json.Marshal(m)
 	if err != nil {
-		fmt.Println("Error encoding JSON:", err)
+		log.Println("Error encoding JSON:", err)
 		return err
 	}
 
