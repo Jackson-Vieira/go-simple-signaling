@@ -6,23 +6,24 @@ import (
 	"time"
 
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
+	"github.com/olahol/melody"
 )
 
 type Room struct {
-	ID          string       `json:"ID"`
-	DisplayName string       `json:"displayName"`
-	Peers       []*Peer      `json:"-"`
-	StartAt     time.Time    `json:"start_at"`
-	CreatedAt   time.Time    `json:"created_at,omitempty"`
-	mu          sync.RWMutex `json:"-"`
+	id          string
+	displayName string
+	users       map[*melody.Session]*User
+	// startAt     time.Time
+	createdAt time.Time
+	mu        sync.Mutex
 }
 
-// return the room id
 func (r *Room) Id() string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	return r.id
+}
 
-	return r.ID
+func (r *Room) GetDisplayName() string {
+	return r.displayName
 }
 
 // init room
@@ -30,40 +31,37 @@ func (r *Room) Init() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// r.lobby = make([]*melody.Session, 0)
-	r.Peers = make([]*Peer, 0)
-	r.CreatedAt = time.Now()
+	r.users = make(map[*melody.Session]*User, 0)
+	r.createdAt = time.Now()
 }
 
 // close room
 func (r *Room) Close() {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	log.Println("Closing room", r.Id())
-	for _, peer := range r.Peers {
-		log.Println("Closing peer", peer.Id())
-		err := peer.Close()
+	for _, u := range r.users {
+		log.Println("Disconnect user connection", u.Id())
+		err := u.Disconnect()
 		if err != nil {
 			log.Println("Error closing peer connection:", err)
 		}
 	}
 }
 
-// return the peers in the room
-func (r *Room) GetPeers() []*Peer {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	return r.Peers
+// return the users unclocked
+func (r *Room) GetUsersUnlocked(except *User) []*User {
+	users := make([]*User, 0, len(r.users))
+	for _, u := range r.users {
+		users = append(users, u)
+	}
+	return users
 }
 
-// set the room peer list
-func (r *Room) SetPeers(peers []*Peer) {
+// return the peers in the room
+func (r *Room) GetUsers(except *User) []*User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.Peers = peers
+	return r.GetUsersUnlocked(except)
 }
 
 // set the room display name
@@ -71,61 +69,52 @@ func (r *Room) SetDisplayName(displayName string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.DisplayName = displayName
-}
-
-// return the room display name
-func (r *Room) GetDisplayName() string {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	return r.DisplayName
+	r.displayName = displayName
 }
 
 // add a peer to the room
-func (r *Room) AddPeer(peer *Peer) {
+func (r *Room) AddUser(s *melody.Session) *User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.Peers = append(r.Peers, peer)
-}
-
-// find peer index by ID
-func (r *Room) FindPeerIndexById(peerId string) int {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
-
-	for i, peer := range r.Peers {
-		if peer.Id() == peerId {
-			return i
-		}
+	// bind user to room and session
+	r.users[s] = &User{
+		room: r,
+		conn: s,
 	}
-	return -1
+
+	return r.users[s]
 }
 
-func (r *Room) RemovePeer(peerId string) {
+func (r *Room) RemoveUser(s *melody.Session) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	peerIndex := r.FindPeerIndexById(peerId)
+	u := r.users[s]
 
-	if peerIndex == -1 {
-		// return peer not found
+	if u == nil {
 		log.Println("peer not found")
 		return
 	}
 
+	// disconnect user
+	err := u.Disconnect()
+	if err != nil {
+		log.Println("Error closing a user connection:", err)
+	}
+
 	// remove peer from room
-	r.Peers = append(r.Peers[:peerIndex], r.Peers[peerIndex+1:]...)
+	delete(r.users, s)
 }
 
-func (r *Room) Broadcast(msg types.ClientMessage) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+func (r *Room) Broadcast(msg types.ClientMessage, except *User) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 
-	peers := r.Peers
-	for _, peer := range peers {
-		err := peer.WriteConn(msg)
+	users := r.GetUsersUnlocked(except)
+
+	for _, u := range users {
+		err := u.WriteConn(msg)
 		if err != nil {
 			log.Fatalln("Error writing to peer:", err)
 		}
