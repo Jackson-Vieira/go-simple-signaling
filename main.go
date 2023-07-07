@@ -167,11 +167,12 @@ func main() {
 			log.Println("answer case")
 
 		case "ice-candidate":
-			log.Println("ice-candidate-case")
-		}
+			log.Println("ice-candidate case")
 
-		// handle unknown message type
-		log.Println("Unknown message type", message.Type)
+		default:
+			// handle unknown message type
+			log.Println("Unknown message type", message.Type)
+		}
 
 	})
 	e.Logger.Fatal(e.Start(":1323"))
