@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
+	"github.com/google/uuid"
 	"github.com/olahol/melody"
 )
 
@@ -77,13 +78,49 @@ func (r *Room) AddUser(s *melody.Session) *User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	// bind user to room and session
+	users := r.GetUsersUnlocked(nil)
+
+	// add user to room
 	r.users[s] = &User{
 		room: r,
 		conn: s,
 	}
+	user := r.users[s]
 
-	return r.users[s]
+	m := types.ClientMessage{
+		Type:    "peer_connected",
+		UserID:  user.Id(),
+		RoomID:  r.Id(),
+		Payload: make(map[string]interface{}),
+		Options: &types.MessageOptions{},
+	}
+
+	r.Broadcast(m, user)
+
+	// TODO: Exchange peer information with new user
+	for _, u := range users {
+
+		log.Println("Exchange peer information with new user", u.Id())
+		if u.Id() == user.Id() {
+			continue
+		}
+
+		m := types.ClientMessage{
+			Type:    "peer_connected",
+			UserID:  u.Id(),
+			RoomID:  r.Id(),
+			Payload: make(map[string]interface{}),
+			Options: &types.MessageOptions{},
+		}
+
+		err := user.WriteConn(m)
+
+		if err != nil {
+			log.Println("Error writing to peer:", err)
+		}
+	}
+
+	return user
 }
 
 func (r *Room) RemoveUser(s *melody.Session) {
@@ -118,5 +155,15 @@ func (r *Room) Broadcast(msg types.ClientMessage, except *User) {
 		if err != nil {
 			log.Fatalln("Error writing to peer:", err)
 		}
+	}
+}
+
+// factory
+func NewRoom(displayName string) *Room {
+	return &Room{
+		id:          uuid.New().String(),
+		displayName: displayName,
+		users:       make(map[*melody.Session]*User, 0),
+		createdAt:   time.Now(),
 	}
 }

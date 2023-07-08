@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
+	"github.com/google/uuid"
 
 	"github.com/olahol/melody"
 )
@@ -61,4 +62,14 @@ func (u *User) Disconnect() error {
 	}
 
 	return nil
+}
+
+// FACTORY
+func NewUser(room *Room, conn *melody.Session, displayName string) *User {
+	return &User{
+		id:          uuid.New().String(),
+		room:        room,
+		conn:        conn,
+		displayName: displayName,
+	}
 }

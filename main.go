@@ -9,7 +9,6 @@ import (
 	"github.com/Jackson-Vieira/go-simple-signalling/domain"
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
 
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	middleware "github.com/labstack/echo/v4/middleware"
 	"github.com/olahol/melody"
@@ -24,16 +23,10 @@ func (rm *RoomManager) CreateRoom(displayName string) string {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	// FIXUP: factory function for creating rooms
-	newRoom := &domain.Room{
-		ID:          uuid.New().String(),
-		DisplayName: displayName,
-	}
-	newRoom.Init()
-
+	newRoom := domain.NewRoom(displayName)
 	roomId := newRoom.Id()
-	rm.rooms[roomId] = newRoom
 
+	rm.rooms[roomId] = newRoom
 	return roomId
 }
 
@@ -55,21 +48,6 @@ func (rm *RoomManager) GetAllRooms() []*domain.Room {
 	}
 	return rooms
 }
-
-// join room
-// leave room
-// func leaveRoom(peer *domain.Peer) {
-// 	room := peer.GetRoom()
-
-// 	if room == nil {
-// 		log.Println("Peer", peer.Id(), "not in a room")
-// 		return
-// 	}
-
-// 	// remove peer from room
-// 	peerId := peer.Id()
-// 	room.RemovePeer(peerId)
-// }
 
 func main() {
 	e := echo.New()
@@ -97,22 +75,22 @@ func main() {
 		return nil
 	})
 
-	// m.HandleConnect(func(s *melody.Session) {
-	// 	log.Println("Connected")
-	// })
+	m.HandleConnect(func(s *melody.Session) {
+		log.Println("New Client connected")
+	})
 
-	// m.HandleDisconnect(func(s *melody.Session) {
-	// 	log.Println("Disconnected")
-	// })
+	m.HandleDisconnect(func(s *melody.Session) {
+		log.Println("Client Disconnected")
+	})
 
-	// m.HandleClose(func(s *melody.Session, i int, s2 string) error {
-	// 	log.Println("Closed")
-	// 	return nil
-	// })
+	m.HandleClose(func(s *melody.Session, i int, s2 string) error {
+		log.Println("Client Closed")
+		return nil
+	})
 
-	// m.HandleError(func(s *melody.Session, e error) {
-	// 	log.Println("Error", e)
-	// })
+	m.HandleError(func(s *melody.Session, e error) {
+		log.Println("Error", e)
+	})
 
 	// websocket event handlers
 	m.HandleMessage(func(s *melody.Session, msg []byte) {
@@ -133,29 +111,7 @@ func main() {
 				log.Println("Room not found")
 				return
 			}
-
-			// FIXUP: factory function for creating peers (with room) and with connection as parameter
-			peer := &domain.Peer{
-				ID:   uuid.New().String(),
-				Room: nil,
-				Conn: s,
-			}
-
-			room.AddPeer(peer)
-
-			// FIXUP: peer.SetRoom
-			peer.Room = room
-
-			// FIXUP: connected message
-			m := types.ClientMessage{
-				Type:    "peer_connected",
-				PeerID:  peer.Id(),
-				RoomID:  room.Id(),
-				Payload: make(map[string]interface{}),
-				Options: message.Options,
-			}
-
-			room.Broadcast(m)
+			room.AddUser(s)
 
 		case "leave":
 			log.Println("leave case")
