@@ -106,6 +106,7 @@ func main() {
 		switch message.Type {
 
 		case "join":
+			log.Println("join case")
 			room, found := roomManager.GetRoom(message.RoomID)
 			if !found {
 				log.Println("Room not found")
@@ -115,18 +116,27 @@ func main() {
 
 		case "leave":
 			log.Println("leave case")
+			room, found := roomManager.GetRoom(message.RoomID)
+			if !found {
+				log.Println("Room not found")
+				return
+			}
+			room.RemoveUser(s)
 
 		case "offer":
-			log.Println("offer case")
-
-		case "answer":
-			log.Println("answer case")
-
+			fallthrough
 		case "ice-candidate":
-			log.Println("ice-candidate case")
+			fallthrough
+		case "answer":
+			log.Printf("%v case \n", message.Type)
+			room, found := roomManager.GetRoom(message.RoomID)
+			if !found {
+				log.Println("Room not found")
+				return
+			}
+			room.Broadcast(message, s)
 
 		default:
-			// handle unknown message type
 			log.Println("Unknown message type", message.Type)
 		}
 

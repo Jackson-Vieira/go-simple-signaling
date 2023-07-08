@@ -49,7 +49,7 @@ func (r *Room) Close() {
 }
 
 // return the users unclocked
-func (r *Room) GetUsersUnlocked(except *User) []*User {
+func (r *Room) GetUsersUnlocked(except *melody.Session) []*User {
 	users := make([]*User, 0, len(r.users))
 	for _, u := range r.users {
 		users = append(users, u)
@@ -58,7 +58,7 @@ func (r *Room) GetUsersUnlocked(except *User) []*User {
 }
 
 // return the users in the room
-func (r *Room) GetUsers(except *User) []*User {
+func (r *Room) GetUsers(except *melody.Session) []*User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -95,7 +95,7 @@ func (r *Room) AddUser(s *melody.Session) *User {
 		Options: &types.MessageOptions{},
 	}
 
-	r.Broadcast(m, user)
+	r.Broadcast(m, s)
 
 	// TODO: Exchange peer information with new user
 	for _, u := range users {
@@ -127,6 +127,8 @@ func (r *Room) RemoveUser(s *melody.Session) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	var m types.ClientMessage
+
 	u := r.users[s]
 
 	if u == nil {
@@ -134,17 +136,36 @@ func (r *Room) RemoveUser(s *melody.Session) {
 		return
 	}
 
-	// disconnect user
-	err := u.Disconnect()
-	if err != nil {
-		log.Println("Error closing a user connection:", err)
+	m = types.ClientMessage{
+		Type:    "user_disconnected",
+		UserID:  u.Id(),
+		RoomID:  r.Id(),
+		Payload: make(map[string]interface{}),
+		Options: &types.MessageOptions{},
 	}
+
+	r.Broadcast(m, s)
 
 	// remove user from room
 	delete(r.users, s)
+
+	// FIXUP: refactor this for a better solution and remove this for another function wrapper in leaveRoom for exaple
+
+	// send leave room message to user
+	m = types.ClientMessage{
+		Type:   "leave_room",
+		RoomID: r.Id(),
+	}
+
+	err := u.WriteConn(m)
+	if err != nil {
+		log.Println("Error writing to user:", err)
+	}
+
+	log.Println("User removed successfully")
 }
 
-func (r *Room) Broadcast(msg types.ClientMessage, except *User) {
+func (r *Room) Broadcast(msg types.ClientMessage, except *melody.Session) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
