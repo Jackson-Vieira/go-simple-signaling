@@ -56,7 +56,20 @@ func (u *User) Disconnect() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	err := u.conn.Close()
+	var err error
+
+	m := types.ClientMessage{
+		Type: "disconnect",
+	}
+
+	err = u.WriteConn(m)
+
+	if err != nil {
+		return err
+	}
+
+	err = u.conn.Close()
+
 	if err != nil {
 		return err
 	}
