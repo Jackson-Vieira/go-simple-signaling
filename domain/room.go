@@ -43,7 +43,7 @@ func (r *Room) Close() {
 		log.Println("Disconnect user connection", u.Id())
 		err := u.Disconnect()
 		if err != nil {
-			log.Println("Error closing peer connection:", err)
+			log.Println("Error closing user connection:", err)
 		}
 	}
 }
@@ -57,7 +57,7 @@ func (r *Room) GetUsersUnlocked(except *User) []*User {
 	return users
 }
 
-// return the peers in the room
+// return the users in the room
 func (r *Room) GetUsers(except *User) []*User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -73,7 +73,7 @@ func (r *Room) SetDisplayName(displayName string) {
 	r.displayName = displayName
 }
 
-// add a peer to the room
+// add a users to the room
 func (r *Room) AddUser(s *melody.Session) *User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -88,7 +88,7 @@ func (r *Room) AddUser(s *melody.Session) *User {
 	user := r.users[s]
 
 	m := types.ClientMessage{
-		Type:    "peer_connected",
+		Type:    "user_connected",
 		UserID:  user.Id(),
 		RoomID:  r.Id(),
 		Payload: make(map[string]interface{}),
@@ -100,13 +100,13 @@ func (r *Room) AddUser(s *melody.Session) *User {
 	// TODO: Exchange peer information with new user
 	for _, u := range users {
 
-		log.Println("Exchange peer information with new user", u.Id())
+		log.Println("Exchange user information with new user", u.Id())
 		if u.Id() == user.Id() {
 			continue
 		}
 
 		m := types.ClientMessage{
-			Type:    "peer_connected",
+			Type:    "user_connected",
 			UserID:  u.Id(),
 			RoomID:  r.Id(),
 			Payload: make(map[string]interface{}),
@@ -116,7 +116,7 @@ func (r *Room) AddUser(s *melody.Session) *User {
 		err := user.WriteConn(m)
 
 		if err != nil {
-			log.Println("Error writing to peer:", err)
+			log.Println("Error writing to user:", err)
 		}
 	}
 
@@ -130,7 +130,7 @@ func (r *Room) RemoveUser(s *melody.Session) {
 	u := r.users[s]
 
 	if u == nil {
-		log.Println("peer not found")
+		log.Println("user not found")
 		return
 	}
 
@@ -140,7 +140,7 @@ func (r *Room) RemoveUser(s *melody.Session) {
 		log.Println("Error closing a user connection:", err)
 	}
 
-	// remove peer from room
+	// remove user from room
 	delete(r.users, s)
 }
 
@@ -153,7 +153,7 @@ func (r *Room) Broadcast(msg types.ClientMessage, except *User) {
 	for _, u := range users {
 		err := u.WriteConn(msg)
 		if err != nil {
-			log.Fatalln("Error writing to peer:", err)
+			log.Fatalln("Error writing to user:", err)
 		}
 	}
 }
