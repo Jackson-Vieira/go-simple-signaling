@@ -63,7 +63,7 @@ func main() {
 		rooms: make(map[string]*domain.Room),
 	}
 
-	roomId := roomManager.CreateRoom("Mindmeet-01")
+	roomId := roomManager.CreateRoom("test")
 	log.Println("Created room test", roomId)
 
 	e.GET("/", func(c echo.Context) error {
@@ -112,7 +112,7 @@ func main() {
 				log.Println("Room not found")
 				return
 			}
-			room.AddUser(s)
+			room.AddUser(s, message)
 
 		case "leave":
 			log.Println("leave case")

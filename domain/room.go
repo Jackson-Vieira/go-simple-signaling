@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
-	"github.com/google/uuid"
 	"github.com/olahol/melody"
 )
 
@@ -74,9 +73,11 @@ func (r *Room) SetDisplayName(displayName string) {
 }
 
 // add a users to the room
-func (r *Room) AddUser(s *melody.Session) *User {
+func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *User {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+
+	var m types.ClientMessage
 
 	users := r.GetUsersUnlocked(nil)
 
@@ -84,33 +85,49 @@ func (r *Room) AddUser(s *melody.Session) *User {
 	r.users[s] = &User{
 		room: r,
 		conn: s,
+		id:   message.UserID,
 	}
 	user := r.users[s]
 
-	m := types.ClientMessage{
-		Type:    "user_connected",
-		UserID:  user.Id(),
-		RoomID:  r.Id(),
-		Payload: make(map[string]interface{}),
-		Options: &types.MessageOptions{},
+	// JOIN MESSAGE
+	m = types.ClientMessage{
+		Type:   "join",
+		UserID: user.Id(),
+		RoomID: r.Id(),
+		Payload: map[string]interface{}{
+			"room": map[string]interface{}{
+				"display_name": r.displayName,
+				"id":           r.id,
+				"created_at":   r.createdAt,
+			},
+		},
+	}
+
+	err := user.WriteConn(m)
+	if err != nil {
+		log.Println("Error writing to user:", err)
+	}
+
+	// USER CONNECTED MESSAGE
+	m = types.ClientMessage{
+		Type:   "user_connected",
+		UserID: user.Id(),
+		RoomID: r.Id(),
 	}
 
 	r.Broadcast(m, s)
 
-	// TODO: Exchange peer information with new user
 	for _, u := range users {
 
-		log.Println("Exchange user information with new user", u.Id())
 		if u.Id() == user.Id() {
 			continue
 		}
 
+		// USER CONNECTED MESSAGE
 		m := types.ClientMessage{
-			Type:    "user_connected",
-			UserID:  u.Id(),
-			RoomID:  r.Id(),
-			Payload: make(map[string]interface{}),
-			Options: &types.MessageOptions{},
+			Type:   "user_connected",
+			UserID: u.Id(),
+			RoomID: r.Id(),
 		}
 
 		err := user.WriteConn(m)
@@ -166,12 +183,16 @@ func (r *Room) RemoveUser(s *melody.Session) {
 }
 
 func (r *Room) Broadcast(msg types.ClientMessage, except *melody.Session) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
 	users := r.GetUsersUnlocked(except)
 
+	log.Println("Broadcast message to users", len(users))
+
 	for _, u := range users {
+
+		if u.conn == except {
+			continue
+		}
+
 		err := u.WriteConn(msg)
 		if err != nil {
 			log.Fatalln("Error writing to user:", err)
@@ -182,7 +203,7 @@ func (r *Room) Broadcast(msg types.ClientMessage, except *melody.Session) {
 // factory
 func NewRoom(displayName string) *Room {
 	return &Room{
-		id:          uuid.New().String(),
+		id:          "1",
 		displayName: displayName,
 		users:       make(map[*melody.Session]*User, 0),
 		createdAt:   time.Now(),
