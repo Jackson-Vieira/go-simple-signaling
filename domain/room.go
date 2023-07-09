@@ -163,11 +163,6 @@ func (r *Room) RemoveUser(s *melody.Session) {
 
 	r.Broadcast(m, s)
 
-	// remove user from room
-	delete(r.users, s)
-
-	// FIXUP: refactor this for a better solution and remove this for another function wrapper in leaveRoom for exaple
-
 	// send leave room message to user
 	m = types.ClientMessage{
 		Type:   "leave_room",
@@ -179,6 +174,10 @@ func (r *Room) RemoveUser(s *melody.Session) {
 		log.Println("Error writing to user:", err)
 	}
 
+	// remove user from room
+	delete(r.users, s)
+
+	// FIXUP: refactor this for a better solution and remove this for another function wrapper in leaveRoom for exaple
 	log.Println("User removed successfully")
 }
 

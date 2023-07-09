@@ -81,6 +81,20 @@ func main() {
 
 	m.HandleDisconnect(func(s *melody.Session) {
 		log.Println("Client Disconnected")
+
+		roomId, exist := s.Get("room_id")
+		if !exist {
+			log.Println("Room id not found")
+			return
+		}
+
+		room, found := roomManager.GetRoom(roomId.(string))
+		if !found {
+			log.Println("Room not found")
+			return
+		}
+
+		room.RemoveUser(s)
 	})
 
 	m.HandleClose(func(s *melody.Session, i int, s2 string) error {
@@ -113,6 +127,9 @@ func main() {
 				return
 			}
 			room.AddUser(s, message)
+
+			// send room id to client
+			s.Set("room_id", room.Id())
 
 		case "leave":
 			log.Println("leave case")
