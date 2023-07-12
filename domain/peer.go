@@ -11,29 +11,28 @@ import (
 	"github.com/olahol/melody"
 )
 
-type User struct {
+type Peer struct {
 	id   string
 	room *Room
-	// FIXME: dont export this field in future
 	conn        *melody.Session
 	displayName string
 	mu          sync.Mutex
 }
 
-func (u *User) Id() string {
+func (u *Peer) Id() string {
 	return u.id
 }
 
-func (u *User) GetDisplayName() string {
+func (u *Peer) GetDisplayName() string {
 	return u.displayName
 }
 
-func (u *User) GetRoom() *Room {
+func (u *Peer) GetRoom() *Room {
 	return u.room
 }
 
 // write a message to the User
-func (u *User) WriteConn(m types.ClientMessage) error {
+func (u *Peer) WriteConn(m types.ClientMessage) error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -52,7 +51,7 @@ func (u *User) WriteConn(m types.ClientMessage) error {
 }
 
 // disconnect user
-func (u *User) Disconnect() error {
+func (u *Peer) Disconnect() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
@@ -78,8 +77,8 @@ func (u *User) Disconnect() error {
 }
 
 // FACTORY
-func NewUser(room *Room, conn *melody.Session, displayName string) *User {
-	return &User{
+func NewUser(room *Room, conn *melody.Session, displayName string) *Peer {
+	return &Peer{
 		id:          uuid.New().String(),
 		room:        room,
 		conn:        conn,

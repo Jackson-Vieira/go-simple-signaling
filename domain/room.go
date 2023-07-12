@@ -10,15 +10,15 @@ import (
 )
 
 type Room struct {
-	id          string
+	id         	int
 	displayName string
-	users       map[*melody.Session]*User
+	peers       map[*melody.Session]*Peer
 	// startAt     time.Time
 	createdAt time.Time
 	mu        sync.Mutex
 }
 
-func (r *Room) Id() string {
+func (r *Room) Id() int {
 	return r.id
 }
 
@@ -31,14 +31,14 @@ func (r *Room) Init() {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	r.users = make(map[*melody.Session]*User, 0)
+	r.peers = make(map[*melody.Session]*Peer, 0)
 	r.createdAt = time.Now()
 }
 
 // close room
 func (r *Room) Close() {
 	log.Println("Closing room", r.Id())
-	for _, u := range r.users {
+	for _, u := range r.peers {
 		log.Println("Disconnect user connection", u.Id())
 		err := u.Disconnect()
 		if err != nil {
@@ -48,20 +48,20 @@ func (r *Room) Close() {
 }
 
 // return the users unclocked
-func (r *Room) GetUsersUnlocked(except *melody.Session) []*User {
-	users := make([]*User, 0, len(r.users))
-	for _, u := range r.users {
-		users = append(users, u)
+func (r *Room) GetPeersUnlocked(except *melody.Session) []*Peer {
+	peers := make([]*Peer, 0, len(r.peers))
+	for _, u := range r.peers {
+		peers = append(peers, u)
 	}
-	return users
+	return peers
 }
 
 // return the users in the room
-func (r *Room) GetUsers(except *melody.Session) []*User {
+func (r *Room) GetUsers(except *melody.Session) []*Peer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.GetUsersUnlocked(except)
+	return r.GetPeersUnlocked(except)
 }
 
 // set the room display name
@@ -73,26 +73,26 @@ func (r *Room) SetDisplayName(displayName string) {
 }
 
 // add a users to the room
-func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *User {
+func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *Peer {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	var m types.ClientMessage
 
-	users := r.GetUsersUnlocked(nil)
+	users := r.GetPeersUnlocked(nil)
 
-	// add user to room
-	r.users[s] = &User{
+	// add peer to room
+	r.peers[s] = &Peer{
 		room: r,
 		conn: s,
 		id:   message.UserID,
 	}
-	user := r.users[s]
+	peer := r.peers[s]
 
 	// JOIN MESSAGE
 	m = types.ClientMessage{
 		Type:   "join",
-		UserID: user.Id(),
+		UserID: peer.Id(),
 		RoomID: r.Id(),
 		Payload: map[string]interface{}{
 			"room": map[string]interface{}{
@@ -103,15 +103,15 @@ func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *User {
 		},
 	}
 
-	err := user.WriteConn(m)
+	err := peer.WriteConn(m)
 	if err != nil {
 		log.Println("Error writing to user:", err)
 	}
 
 	// USER CONNECTED MESSAGE
 	m = types.ClientMessage{
-		Type:   "user_connected",
-		UserID: user.Id(),
+		Type:   "peer_connected",
+		UserID: peer.Id(),
 		RoomID: r.Id(),
 	}
 
@@ -119,25 +119,25 @@ func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *User {
 
 	for _, u := range users {
 
-		if u.Id() == user.Id() {
+		if u.Id() == peer.Id() {
 			continue
 		}
 
 		// USER CONNECTED MESSAGE
 		m := types.ClientMessage{
-			Type:   "user_connected",
+			Type:   "peer_connected",
 			UserID: u.Id(),
 			RoomID: r.Id(),
 		}
 
-		err := user.WriteConn(m)
+		err := peer.WriteConn(m)
 
 		if err != nil {
 			log.Println("Error writing to user:", err)
 		}
 	}
 
-	return user
+	return peer
 }
 
 func (r *Room) RemoveUser(s *melody.Session) {
@@ -146,7 +146,7 @@ func (r *Room) RemoveUser(s *melody.Session) {
 
 	var m types.ClientMessage
 
-	u := r.users[s]
+	u := r.peers[s]
 
 	if u == nil {
 		log.Println("user not found")
@@ -154,7 +154,7 @@ func (r *Room) RemoveUser(s *melody.Session) {
 	}
 
 	m = types.ClientMessage{
-		Type:    "user_disconnected",
+		Type:    "peer_disconnected",
 		UserID:  u.Id(),
 		RoomID:  r.Id(),
 		Payload: make(map[string]interface{}),
@@ -175,18 +175,18 @@ func (r *Room) RemoveUser(s *melody.Session) {
 	}
 
 	// remove user from room
-	delete(r.users, s)
+	delete(r.peers, s)
 
 	// FIXUP: refactor this for a better solution and remove this for another function wrapper in leaveRoom for exaple
-	log.Println("User removed successfully")
+	log.Println("Peer removed successfully")
 }
 
 func (r *Room) Broadcast(msg types.ClientMessage, except *melody.Session) {
-	users := r.GetUsersUnlocked(except)
+	peers := r.GetPeersUnlocked(except)
 
-	log.Println("Broadcast message to users", len(users))
+	log.Println("Broadcast message to peers", len(peers))
 
-	for _, u := range users {
+	for _, u := range peers {
 
 		if u.conn == except {
 			continue
@@ -200,11 +200,11 @@ func (r *Room) Broadcast(msg types.ClientMessage, except *melody.Session) {
 }
 
 // factory
-func NewRoom(displayName string) *Room {
+func NewRoom(id int, displayName string) *Room {
 	return &Room{
-		id:          "1",
+		id:          id,
 		displayName: displayName,
-		users:       make(map[*melody.Session]*User, 0),
+		peers:       make(map[*melody.Session]*Peer, 0),
 		createdAt:   time.Now(),
 	}
 }

@@ -15,22 +15,31 @@ import (
 )
 
 type RoomManager struct {
-	rooms map[string]*domain.Room
+	rooms map[int]*domain.Room
 	mu    sync.RWMutex
 }
 
-func (rm *RoomManager) CreateRoom(displayName string) string {
+func (rm *RoomManager) newRoomId() int {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
-	newRoom := domain.NewRoom(displayName)
-	roomId := newRoom.Id()
-
-	rm.rooms[roomId] = newRoom
-	return roomId
+	return len(rm.rooms) + 1
 }
 
-func (rm *RoomManager) GetRoom(roomId string) (*domain.Room, bool) {
+func (rm *RoomManager) CreateRoom(displayName string) int {
+	rm.mu.Lock()
+	defer rm.mu.Unlock()
+	
+
+	rid := rm.newRoomId()
+
+	newRoom := domain.NewRoom(rid, displayName)
+
+	rm.rooms[rid] = newRoom
+	return rid
+}
+
+func (rm *RoomManager) GetRoom(roomId int) (*domain.Room, bool) {
 	rm.mu.Lock()
 	defer rm.mu.Unlock()
 
@@ -60,14 +69,14 @@ func main() {
 	m.Config.MaxMessageSize = 8192
 
 	roomManager := RoomManager{
-		rooms: make(map[string]*domain.Room),
+		rooms: make(map[int]*domain.Room),
 	}
 
 	roomId := roomManager.CreateRoom("test")
 	log.Println("Created room test", roomId)
 
 	e.GET("/", func(c echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
+		return c.String(http.StatusOK, "/")
 	})
 
 	e.GET("/ws", func(c echo.Context) error {
@@ -88,7 +97,7 @@ func main() {
 			return
 		}
 
-		room, found := roomManager.GetRoom(roomId.(string))
+		room, found := roomManager.GetRoom(roomId.(int))
 		if !found {
 			log.Println("Room not found")
 			return
