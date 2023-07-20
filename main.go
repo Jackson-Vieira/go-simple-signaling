@@ -4,59 +4,15 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"sync"
 
-	"github.com/Jackson-Vieira/go-simple-signalling/domain"
+	"github.com/Jackson-Vieira/go-simple-signalling/controllers"
+	"github.com/Jackson-Vieira/go-simple-signalling/handlers"
 	"github.com/Jackson-Vieira/go-simple-signalling/types"
 
 	"github.com/labstack/echo/v4"
 	middleware "github.com/labstack/echo/v4/middleware"
 	"github.com/olahol/melody"
 )
-
-type RoomManager struct {
-	rooms map[int]*domain.Room
-	mu    sync.RWMutex
-}
-
-func (rm *RoomManager) newRoomId() int {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	return len(rm.rooms) + 1
-}
-
-func (rm *RoomManager) CreateRoom(displayName string) int {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-	
-
-	rid := rm.newRoomId()
-
-	newRoom := domain.NewRoom(rid, displayName)
-
-	rm.rooms[rid] = newRoom
-	return rid
-}
-
-func (rm *RoomManager) GetRoom(roomId int) (*domain.Room, bool) {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	room, ok := rm.rooms[roomId]
-	return room, ok
-}
-
-func (rm *RoomManager) GetAllRooms() []*domain.Room {
-	rm.mu.Lock()
-	defer rm.mu.Unlock()
-
-	rooms := make([]*domain.Room, 0, len(rm.rooms))
-	for _, room := range rm.rooms {
-		rooms = append(rooms, room)
-	}
-	return rooms
-}
 
 func main() {
 	e := echo.New()
@@ -68,13 +24,10 @@ func main() {
 	m := melody.New()
 	m.Config.MaxMessageSize = 8192
 
-	roomManager := RoomManager{
-		rooms: make(map[int]*domain.Room),
-	}
-
-	roomId := roomManager.CreateRoom("test")
-	log.Println("Created room test", roomId)
-
+	// TODO: room manager package 
+	roomManager := controllers.NewRoomManager()
+	
+	
 	e.GET("/", func(c echo.Context) error {
 		return c.String(http.StatusOK, "/")
 	})
@@ -85,87 +38,56 @@ func main() {
 	})
 
 	m.HandleConnect(func(s *melody.Session) {
+		// this maybe is useful for log or make some operation when client connect 
+		// set a timer for the client join in a room for example, ... 
 		log.Println("New Client connected")
 	})
-
+	
 	m.HandleDisconnect(func(s *melody.Session) {
 		log.Println("Client Disconnected")
-
+		
 		roomId, exist := s.Get("room_id")
+		
 		if !exist {
-			log.Println("Room id not found")
 			return
 		}
-
+		
 		room, found := roomManager.GetRoom(roomId.(int))
+		
 		if !found {
-			log.Println("Room not found")
+			// reset room id
+			s.Set("room_id", nil)
+			
 			return
 		}
-
+		
 		room.RemoveUser(s)
 	})
-
+	
 	m.HandleClose(func(s *melody.Session, i int, s2 string) error {
 		log.Println("Client Closed")
 		return nil
 	})
-
+	
 	m.HandleError(func(s *melody.Session, e error) {
 		log.Println("Error", e)
 	})
 
 	// websocket event handlers
 	m.HandleMessage(func(s *melody.Session, msg []byte) {
-
 		var message types.ClientMessage
 		err := json.Unmarshal(msg, &message)
-
+		
 		if err != nil {
 			log.Println("Error decoding JSON", m)
 			return
 		}
-
-		switch message.Type {
-
-		case "join":
-			log.Println("join case")
-			room, found := roomManager.GetRoom(message.RoomID)
-			if !found {
-				log.Println("Room not found")
-				return
-			}
-			room.AddUser(s, message)
-
-			// send room id to client
-			s.Set("room_id", room.Id())
-
-		case "leave":
-			log.Println("leave case")
-			room, found := roomManager.GetRoom(message.RoomID)
-			if !found {
-				log.Println("Room not found")
-				return
-			}
-			room.RemoveUser(s)
-
-		case "offer":
-			fallthrough
-		case "ice-candidate":
-			fallthrough
-		case "answer":
-			log.Printf("%v case \n", message.Type)
-			room, found := roomManager.GetRoom(message.RoomID)
-			if !found {
-				log.Println("Room not found")
-				return
-			}
-			room.Broadcast(message, s)
-
-		default:
-			log.Println("Unknown message type", message.Type)
-		}
-
+		
+		eventHadler := handlers.CreateEventHandler(message.Type)
+		eventHadler.Handle(s, message, roomManager)
 	})
-	e.Logger.Fatal(e.Start(":1323"))
+	
+	rid := roomManager.CreateRoom("Mindmeet-01")
+	log.Println(rid)
+	e.Logger.Fatal(e.Start(":8000"))
 }

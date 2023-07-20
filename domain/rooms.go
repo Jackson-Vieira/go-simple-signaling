@@ -13,10 +13,10 @@ type Room struct {
 	id         	int
 	displayName string
 	peers       map[*melody.Session]*Peer
-	// startAt     time.Time
 	createdAt time.Time
 	mu        sync.Mutex
 }
+
 
 func (r *Room) Id() int {
 	return r.id
@@ -91,7 +91,7 @@ func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *Peer {
 
 	// JOIN MESSAGE
 	m = types.ClientMessage{
-		Type:   "join",
+		Type:   JoinRoom,
 		UserID: peer.Id(),
 		RoomID: r.Id(),
 		Payload: map[string]interface{}{
@@ -110,7 +110,7 @@ func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *Peer {
 
 	// USER CONNECTED MESSAGE
 	m = types.ClientMessage{
-		Type:   "peer_connected",
+		Type:   PeerConnected,
 		UserID: peer.Id(),
 		RoomID: r.Id(),
 	}
@@ -123,9 +123,9 @@ func (r *Room) AddUser(s *melody.Session, message types.ClientMessage) *Peer {
 			continue
 		}
 
-		// USER CONNECTED MESSAGE
 		m := types.ClientMessage{
-			Type:   "peer_connected",
+			// TODO: messages.PeerConnected
+			Type:   PeerConnected,
 			UserID: u.Id(),
 			RoomID: r.Id(),
 		}

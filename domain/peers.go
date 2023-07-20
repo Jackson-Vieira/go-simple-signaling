@@ -50,7 +50,7 @@ func (u *Peer) WriteConn(m types.ClientMessage) error {
 	return nil
 }
 
-// disconnect user
+// disconnect the peer client
 func (u *Peer) Disconnect() error {
 	u.mu.Lock()
 	defer u.mu.Unlock()
@@ -58,7 +58,7 @@ func (u *Peer) Disconnect() error {
 	var err error
 
 	m := types.ClientMessage{
-		Type: "disconnect",
+		Type: ConnectionClosed,
 	}
 
 	err = u.WriteConn(m)
@@ -76,7 +76,6 @@ func (u *Peer) Disconnect() error {
 	return nil
 }
 
-// FACTORY
 func NewUser(room *Room, conn *melody.Session, displayName string) *Peer {
 	return &Peer{
 		id:          uuid.New().String(),
